@@ -4,8 +4,29 @@ const run = async () => {
     try {
         const connection = await connect('amqp://localhost')
         const channel = await connection.createChannel()
-        await channel.assertExchange('test', 'topic', { durable: true })
-        channel.publish('test', 'my-command', Buffer.from('Работает!'))
+        await channel.assertExchange(
+            'test',
+            'topic',
+            { durable: true },
+        )
+        // выделение очереди для ответа
+        const replyQueue = await channel.assertQueue('', { exclusive: true })
+        // слушаем через очередь
+        channel.consume(replyQueue.queue, message => {
+            console.log(message?.content.toString())
+            console.log(message?.properties.correlationId)
+        })
+        channel.publish(
+            'test',
+            'my-command',
+            Buffer.from('Работает!'),
+            {
+                // укзываем куда передаем информацию
+                replyTo: replyQueue.queue,
+                // идентификация сообщения
+                correlationId: '1',
+            },
+        )
     } catch (e) {
         console.error(e)
     }
